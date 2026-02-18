@@ -1,0 +1,145 @@
+"""
+Project : Google Play Store App Analysis
+Author  : Mohamed Arrshin
+Purpose : Analyse Play Store apps and predict ratings
+Tools   : Python, Pandas, ML (Random Forest)
+
+This project demonstrates data cleaning,
+analysis and a basic ML model suitable
+for a Data Analyst / Data Science internship.
+"""
+
+# -------------------------------
+# Import libraries
+# -------------------------------
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score, mean_squared_error
+
+print("\nReading dataset...")
+data = pd.read_csv("googleplaystore.csv")
+
+
+# -------------------------------
+# Basic inspection
+# -------------------------------
+print("\nDataset Shape:", data.shape)
+print(data.head())
+
+
+# -------------------------------
+# DATA CLEANING
+# -------------------------------
+print("\nCleaning data...")
+
+# remove incorrect row present in dataset
+data = data[data["Category"] != "1.9"]
+
+# remove rows with important missing values
+data.dropna(subset=["Rating", "Type"], inplace=True)
+
+# Reviews → integer
+data["Reviews"] = data["Reviews"].astype(int)
+
+# Installs → remove '+' and ','
+data["Installs"] = (
+    data["Installs"]
+    .str.replace(",", "")
+    .str.replace("+", "")
+    .astype(int)
+)
+
+# Price → remove $
+data["Price"] = data["Price"].str.replace("$", "", regex=False)
+data["Price"] = data["Price"].astype(float)
+
+
+# Convert Size column
+def clean_size(value):
+    if isinstance(value, str):
+        if "M" in value:
+            return float(value.replace("M", ""))
+        elif "k" in value:
+            return float(value.replace("k", "")) / 1000
+    return np.nan
+
+
+data["Size"] = data["Size"].apply(clean_size)
+
+# remove remaining null values
+data.dropna(inplace=True)
+
+print("Cleaning completed.")
+
+
+# -------------------------------
+# SIMPLE DATA ANALYSIS
+# -------------------------------
+print("\nTop App Categories:")
+print(data["Category"].value_counts().head())
+
+print("\nAverage Rating by Category:")
+print(
+    data.groupby("Category")["Rating"]
+    .mean →sort_values(ascending=False)
+    .head()
+)
+
+
+# -------------------------------
+# MACHINE LEARNING PART
+# -------------------------------
+print("\nPreparing data for model...")
+
+encoder = LabelEncoder()
+
+for col in ["Category", "Type", "Content Rating", "Genres"]:
+    data[col] = encoder.fit_transform(data[col])
+
+# features and target
+X = data[
+    ["Category", "Reviews", "Size",
+     "Installs", "Type", "Price",
+     "Genres", "Content Rating"]
+]
+
+y = data["Rating"]
+
+# split data
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+print("Training model...")
+
+model = RandomForestRegressor(random_state=42)
+model.fit(X_train, y_train)
+
+# predictions
+predictions = model.predict(X_test)
+
+# evaluation
+mse = mean_squared_error(y_test, predictions)
+r2 = r2_score(y_test, predictions)
+
+print("\nModel Results")
+print("-------------------")
+print("MSE :", round(mse, 3))
+print("R2 Score :", round(r2, 3))
+
+
+# -------------------------------
+# SMALL BUSINESS INSIGHT
+# -------------------------------
+importance = pd.Series(
+    model.feature_importances_,
+    index=X.columns
+).sort_values(ascending=False)
+
+print("\nFeatures affecting app rating:")
+print(importance)
+
+print("\nProject Completed Successfully ✅")
